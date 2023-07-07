@@ -135,59 +135,39 @@ class ChatbotController extends Controller
         }
         
     }
+    
+    public function convertSpeechToText(Request $request)
+    {
+        $audioFile = $request->file('audio');
 
+        // Check if audio file exists
+        if (!$audioFile) {
+            return response()->json([
+                'error' => 'No audio file provided.',
+            ], 400);
+        }
 
+        // Prepare the API request
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
+        ])->attach('audio', $audioFile)->post('https://api.openai.com/v1/speech-to-text');
 
-    // public function sendMessage(Request $request)
-    // {
-    //     // Get the user's input message
-    //     $userMessage = $request->input('message');
+        // Check if the request was successful
+        if ($response->successful()) {
+            $transcription = $response->json('text');
 
-    //     // Store the conversation context in the session
-    //     // $context = session('context', []);
-    //     $sessionEmail = 'dhaffa@vanaroma.com';
-    //     $context = Conversation::where('email', $sessionEmail)->value('context') ?? [];
-
-    //     // Append the user's message to the context
-    //     $context[] = [
-    //         'role' => 'user',
-    //         'message' => $userMessage,
-    //     ];
-
-    //     // Send the conversation context and the user's message to the OpenAI API
-    //     $response = Http::withHeaders([
-    //         'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
-    //         'Content-Type' => 'application/json',
-    //     ])->post('https://api.openai.com/v1/chat/completions', [
-    //         'model' =>  "gpt-3.5-turbo",
-    //         // 'messages' => $this->formatPrompt($context),
-    //         'messages' => $this->formatPrompt($context),
-    //         'max_tokens' => 50, // Adjust as per your requirements
-    //     ]);
-    //     // Extract the chatbot's reply from the API response
-    //     // $chatbotReply = $response->json();
-    //     $chatbotReply = $response->json('choices.0.message.content');
-    //     // $chatbotReply = env('OPENAI_API_KEY');
-
-    //     // Append the chatbot's reply to the context
-    //     $context[] = [
-    //         'role' => 'chatbot',
-    //         'message' => $chatbotReply,
-    //     ];
-
-    //     // Store the updated context in the session
-    //     // Store the updated context in the database
-    //     Conversation::updateOrCreate(
-    //         ['email' => $sessionEmail],
-    //         ['context' => json_encode($context)]
-    //     );
-    //     // session(['context' => $context]);
-
-    //     // Return the chatbot's reply as a response
-    //     return response()->json([
-    //         'reply' => $chatbotReply,
-    //     ]);
-    // }
+            // Return the transcript as a response
+            return response()->json([
+                'transcript' => $transcription,
+            ]);
+        } else {
+            // Handle the API request error
+            $errorMessage = $response->json('error.message', 'An error occurred while processing the audio.');
+            return response()->json([
+                'error' => $errorMessage,
+            ], $response->status());
+        }
+    }
 
     private function formatPrompt($context)
     {
