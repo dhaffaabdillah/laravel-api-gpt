@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Conversation;
+use GuzzleHttp\Client;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -139,7 +140,7 @@ class ChatbotController extends Controller
     public function convertSpeechToText(Request $request)
     {
         $audioFile = $request->file('audio');
-
+        $filename = $audioFile->getClientOriginalName();
         // Check if audio file exists
         if (!$audioFile) {
             return response()->json([
@@ -147,25 +148,39 @@ class ChatbotController extends Controller
             ], 400);
         }
 
-        // Prepare the API request
-        $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
-        ])->attach('audio', $audioFile)->post('https://api.openai.com/v1/speech-to-text');
+        $client = new Client();
+        $response = $client->post('https://api.openai.com/v1/audio/transcriptions', [
+            'headers' => [
+                'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
+            ],
+            'multipart' => [
+                [
+                    'name' => 'file',
+                    'contents' => fopen($audioFile->getRealPath(), 'r'),
+                    'filename' => $filename,
+                ],
+                [
+                    'name' => 'model',
+                    'contents' => 'whisper-1',
+                ],
+            ],
+        ]);
 
         // Check if the request was successful
-        if ($response->successful()) {
-            $transcription = $response->json('text');
+        if ($response->getStatusCode() === 200) {
+            $data = json_decode($response->getBody()->getContents(), true);
+            $transcript = $data['text'];
 
             // Return the transcript as a response
             return response()->json([
-                'transcript' => $transcription,
+                'transcript' => $transcript,
             ]);
         } else {
             // Handle the API request error
-            $errorMessage = $response->json('error.message', 'An error occurred while processing the audio.');
+            $errorMessage = $response->getReasonPhrase();
             return response()->json([
                 'error' => $errorMessage,
-            ], $response->status());
+            ], $response->getStatusCode());
         }
     }
 
