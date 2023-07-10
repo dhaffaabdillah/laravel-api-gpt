@@ -110,6 +110,74 @@ class ChatbotController extends Controller
         }
     }
 
+    public function analyzeData(Request $request)
+    {
+        $file = $request->file('file');
+        // $file_path = $file->store('uploads');
+        // $file_path = $file->getClientOriginalName();
+        $file_path = public_path('excel.xlsx');
+        // Get the user's input message
+        $userMessage = $request->input('message');
+
+        // Store the conversation context in the session
+        $sessionEmail = $request->input('email');
+        $recid_conversation = $request->input('recid_conversation'); // Notes: You must generate uuid in this request
+        $conversation = Conversation::where('recid_conversations', $recid_conversation)
+                    ->where('email', $sessionEmail)
+                    ->first();
+
+        if (!$conversation) {
+            $conversation = new Conversation();
+            $conversation->recid_conversations = $recid_conversation;
+            $conversation->email = $sessionEmail;
+            $conversation->context = '[]';
+            $conversation->save();
+        }
+
+        $context = json_decode($conversation->context, true);
+
+        // Append the user's message to the context
+        $context[] = [
+            'role' => 'user',
+            'message' => $userMessage,
+        ];
+
+        // Send the conversation context and the user's message to the OpenAI API
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
+            'Content-Type' => 'application/json',
+        ])->post('https://api.openai.com/v1/fine-tunes/analysis', [
+            'file' => file_get_contents($file_path ),
+        ]);
+
+        
+        // Check if the API call was successful
+        if ($response->successful()) {
+            // Extract the chatbot's reply from the API response
+            $chatbotReply = $response->json('analysis');
+
+            // Append the chatbot's reply to the context
+            $context[] = [
+                'role' => 'assistant',
+                'message' => $chatbotReply,
+            ];
+
+            // Update the conversation context in the database
+            $conversation->context = json_encode($context);
+            $conversation->save();
+
+            // Return the response
+            return response()->json([
+                'reply' => $chatbotReply,
+                'conversation_id' => $recid_conversation,
+            ]);
+        } else {
+            // Get the error response from the OpenAI API
+            $errorResponse = $response->json();
+            return response()->json($errorResponse, $response->status());
+        }
+    }
+
     public function analyzeExcel()
     {
         try {
@@ -180,6 +248,7 @@ class ChatbotController extends Controller
         }
         
     }
+   
     
     public function convertSpeechToText(Request $request)
     {

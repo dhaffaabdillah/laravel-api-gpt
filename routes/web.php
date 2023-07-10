@@ -15,8 +15,6 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::get('/', function () {
-    return view('welcome');
-});
+Route::get('/', [ChatController::class, 'index']);
 Route::post('/chatbot', [ChatbotController::class, 'sendMessage']);
 Route::get('/chat/{id}', [ChatController::class, 'index']);
