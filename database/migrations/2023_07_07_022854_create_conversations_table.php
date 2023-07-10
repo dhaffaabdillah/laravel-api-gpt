@@ -14,8 +14,8 @@ class CreateConversationsTable extends Migration
     public function up()
     {
         Schema::create('conversations', function (Blueprint $table) {
-            $table->id();
-            $table->string('email')->unique();
+            $table->uuid('recid_conversations')->primary();
+            $table->string('email');
             $table->json('context')->nullable();
             $table->timestamps();
         });

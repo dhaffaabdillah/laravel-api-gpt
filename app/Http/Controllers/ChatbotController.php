@@ -8,9 +8,41 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use Illuminate\Support\Str;
 
 class ChatbotController extends Controller
 {
+    public function fetchConversationHistory(Request $request)
+    {
+        try {
+            $recidConversation = $request->input('recid_conversation');
+            $conversation = Conversation::where('recid_conversations', $recidConversation)
+                ->orderBy('created_at', 'ASC')
+                ->first();
+
+            if ($conversation) {
+                $context = json_decode($conversation->context, true);
+
+                // Extract the chat messages from the context
+                $messages = array_map(function ($message) {
+                    return [
+                        'role' => $message['role'],
+                        'message' => $message['message'],
+                    ];
+                }, $context);
+
+                return response()->json($messages);
+            }
+
+            return response()->json([]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Failed to fetch conversation history.',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
 
     public function sendMessage(Request $request)
     {
@@ -18,11 +50,15 @@ class ChatbotController extends Controller
         $userMessage = $request->input('message');
 
         // Store the conversation context in the session
-        $sessionEmail = 'dhaffa@vanaroma.com';
-        $conversation = Conversation::where('email', $sessionEmail)->first();
+        $sessionEmail = $request->input('email');
+        $recid_conversation = $request->input('recid_conversation'); // Notes: You must generate uuid in this request
+        $conversation = Conversation::where('recid_conversations', $recid_conversation)
+                    ->where('email', $sessionEmail)
+                    ->first();
 
         if (!$conversation) {
             $conversation = new Conversation();
+            $conversation->recid_conversations = $recid_conversation;
             $conversation->email = $sessionEmail;
             $conversation->context = '[]';
             $conversation->save();
@@ -46,24 +82,32 @@ class ChatbotController extends Controller
             // 'max_tokens' => 50, // Adjust as per your requirements
         ]);
 
-        // Extract the chatbot's reply from the API response
-        $chatbotReply = $response->json('choices.0.message.content');
-        // $chatbotReply = $response->json();
+        
+        // Check if the API call was successful
+        if ($response->successful()) {
+            // Extract the chatbot's reply from the API response
+            $chatbotReply = $response->json('choices.0.message.content');
 
-        // Append the chatbot's reply to the context
-        $context[] = [
-            'role' => 'assistant',
-            'message' => $chatbotReply,
-        ];
+            // Append the chatbot's reply to the context
+            $context[] = [
+                'role' => 'assistant',
+                'message' => $chatbotReply,
+            ];
 
-        // Update the conversation context in the database
-        $conversation->context = json_encode($context);
-        $conversation->save();
+            // Update the conversation context in the database
+            $conversation->context = json_encode($context);
+            $conversation->save();
 
-        // Return the chatbot's reply as a response
-        return response()->json([
-            'reply' => $chatbotReply,
-        ]);
+            // Return the response
+            return response()->json([
+                'reply' => $chatbotReply,
+                'conversation_id' => $recid_conversation,
+            ]);
+        } else {
+            // Get the error response from the OpenAI API
+            $errorResponse = $response->json();
+            return response()->json($errorResponse, $response->status());
+        }
     }
 
     public function analyzeExcel()

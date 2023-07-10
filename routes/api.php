@@ -19,6 +19,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
+Route::post('/history-chat', [ChatbotController::class, 'fetchConversationHistory']);
 Route::post('/chatbot', [ChatbotController::class, 'sendMessage']);
 Route::post('/analyze-excel', [ChatbotController::class, 'analyzeExcel']);
 Route::post('/speech-to-text', [ChatbotController::class, 'convertSpeechToText']);
