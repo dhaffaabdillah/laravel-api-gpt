@@ -11,6 +11,12 @@ body {
     width: 200px;
     background-color: #f1f1f1;
     padding: 10px;
+    
+}
+
+#chatHistoryList {
+    max-height: 30vh;
+    overflow-y: scroll;
 }
 
 .chat-container {
@@ -95,38 +101,27 @@ body {
 }
 
 .loading-animation {
-    display: inline-block;
-    position: relative;
-    width: 80px;
-    height: 80px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.loading-animation:before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #4caf50;
+  margin-right: 5px;
+  animation: loading 1s linear infinite;
+}
+
+@keyframes loading {
+  0% {
+    opacity: 1;
   }
-  .loading-animation div {
-    box-sizing: border-box;
-    display: block;
-    position: absolute;
-    width: 64px;
-    height: 64px;
-    margin: 8px;
-    border: 8px solid #fff;
-    border-radius: 50%;
-    animation: loading-animation 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
-    border-color: #fff transparent transparent transparent;
+  100% {
+    opacity: 0;
+    transform: scale(1.2);
   }
-  .loading-animation div:nth-child(1) {
-    animation-delay: -0.45s;
-  }
-  .loading-animation div:nth-child(2) {
-    animation-delay: -0.3s;
-  }
-  .loading-animation div:nth-child(3) {
-    animation-delay: -0.15s;
-  }
-  @keyframes loading-animation {
-    0% {
-      transform: rotate(0deg);
-    }
-    100% {
-      transform: rotate(360deg);
-    }
-  }
-  
+}

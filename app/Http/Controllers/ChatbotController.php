@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\StringHelper;
 use App\Models\Conversation;
 use GuzzleHttp\Client;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use Illuminate\Support\Str;
@@ -42,12 +44,29 @@ class ChatbotController extends Controller
             ], 500);
         }
     }
+    public function fetchChatHistory(Request $request)
+    {
+        try {
+            $email = $request->input('email');
+            $conversation = Conversation::where('email', $email)
+                ->orderBy('created_at', 'DESC')
+                ->get();
+            
+
+            return response()->json(['data' => $conversation]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Failed to fetch conversation history.',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
 
 
     public function sendMessage(Request $request)
     {
         // Get the user's input message
-        $userMessage = $request->input('message');
+        $userMessage = StringHelper::repair($request->input('message'));
 
         // Store the conversation context in the session
         $sessionEmail = $request->input('email');
@@ -108,6 +127,75 @@ class ChatbotController extends Controller
             $errorResponse = $response->json();
             return response()->json($errorResponse, $response->status());
         }
+    }
+
+    public function trainModel(Request $request)
+    {
+        $file = $request->file('file');
+        $filename = 'Dataset-'.Str::uuid().'-'.$file->getClientOriginalName();
+
+        // Save the training file to the storage disk
+        $path = $file->storeAs('training_file', $filename, 'public');
+        $filePath = storage_path('' . $path); // Get the full file path
+        // $response = Http::withHeaders([
+        //     'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
+        //     'Content-Type' => 'multipart/form-data',
+        // ])->attach('file', fopen("https://vanaroma.sgp1.digitaloceanspaces.com/dataset.jsonl", 'r'), "dataset1")
+        // ->post('https://api.openai.com/v1/files', [
+        //     'prompt' => $request->input('prompt'),
+        //     'purpose' => $request->input('purpose'),
+        //     // 'file' => $filename
+        // ]);
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
+            'Content-Type' => 'multipart/form-data',
+        ])->post('https://api.openai.com/v1/files', [
+            'file' => $file,
+        ]);
+    
+
+        if ($response->successful()) {
+            // Training request successful
+            return response()->json(['message' => $response]);
+        } else {
+            // Training request failed
+            return response()->json(['msg' => $response->json(), 'err' => $filePath], $response->status());
+        }
+        // try {
+        //     // Retrieve the uploaded file from the request
+        //     $file = $request->file('file');
+    
+        //     // Make sure a file was uploaded
+        //     if (!$file) {
+        //         throw new \Exception('No file uploaded.');
+        //     }
+    
+        //     // Get the OpenAI API key from the .env file
+        //     $apiKey = env('OPENAI_API_KEY');
+    
+        //     // Make a POST request to the OpenAI API using the uploaded file and API key
+        //     $response = Http::withHeaders([
+        //         'Authorization' => 'Bearer ' . $apiKey,
+        //     ])->post('https://api.openai.com/v1/files', [
+        //         'file' => $file,
+        //     ]);
+    
+        //     // Check if the request was successful
+        //     if (!$response->successful()) {
+        //         throw new \Exception('Failed to upload file to OpenAI.');
+        //     }
+    
+        //     // Get the response data from OpenAI
+        //     $responseData = $response->json();
+    
+        //     // Return the response from OpenAI
+        //     return response()->json($responseData);
+        // } catch (\Exception $e) {
+        //     return response()->json([
+        //         'error' => 'Failed to upload file.',
+        //         'message' => $e->getMessage(),
+        //     ], 500);
+        // }
     }
 
     public function analyzeData(Request $request)

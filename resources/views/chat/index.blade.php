@@ -21,18 +21,14 @@
 </head>
 
 <body>
-    <div class="chat-container">
-        <div class="sidebar">
+    <div class="chat-container row">
+        <div class="sidebar col-md-4">
             <h3>Chat History</h3>
-            <ul>
-                <li>Chat 1</li>
-                <li>Chat 2</li>
-                <li>Chat 3</li>
-                <li>Chat 4</li>
-                <li>Chat 5</li>
-            </ul>
+            <div id="chatHistoryList">
+
+            </div>
         </div>
-        <div class="chat-content">
+        <div class="chat-content col-md-8">
             <div class="chat-messages" id="chatMessages"></div>
             <div class="chat-input">
                 
@@ -40,7 +36,7 @@
                 <button id="microphoneButton">
                     <i class="fa fa-microphone"></i>
                 </button>
-                <button id="sendMessageButton">Send</button>
+                <button id="sendMessageButton"><i class="fa fa-paper-plane"></i></button>
             </div>
         </div>
     </div>
@@ -54,7 +50,6 @@
 
 const url = window.location.href;
 const recidConversation = extractUUIDFromURL(url) || '{{ $recid }}';
-console.log(recidConversation);
 
 function extractUUIDFromURL(url) {
     const regex = /\/chat\/(\w{8}-(\w{4}-){3}\w{12})/;
@@ -260,7 +255,8 @@ $(document).ready(function () {
     // Function to add a chat message to the chat interface
     function addChatMessage(role, message) {
         const chatMessages = $('#chatMessages');
-        const messageContent = $('<div>').addClass('message-content').text(message);
+        var formattedMessage = message.replace(/\n/g, '<br>'); // Replace newline characters with HTML line breaks
+        const messageContent = $('<div>').addClass('message-content').html(formattedMessage);
         const chatMessage = $('<div>').addClass('chat-message').addClass(role + '-message').append(messageContent);
         chatMessages.append(chatMessage);
 
@@ -301,22 +297,64 @@ $(document).ready(function () {
 
         // Make an AJAX request to fetch the conversation history
         $.ajax({
-        url: `/api/history-chat`,
-        method: 'POST',
-        data: {
-            recid_conversation: recidConversation
-        },
-        success: function (response) {
-            // Iterate through the chat messages and display them in the chat interface
-            response.forEach(function (message) {
-                addChatMessage(message.role, message.message);
-            });
-        },
-        error: function (error) {
-            console.error(error);
-        }
+            url: `/api/history-chat`,
+            method: 'POST',
+            data: {
+                recid_conversation: recidConversation
+            },
+            success: function (response) {
+                // Iterate through the chat messages and display them in the chat interface
+                
+                response.forEach(function (message) {
+                    var formattedMessage = message.message.replace(/\n/g, '<br>'); // Replace newline characters with HTML line breaks
+                    addChatMessage(message.role, formattedMessage);
+                });
+            },
+            error: function (error) {
+                console.error(error);
+            }
         });
     }
+    
+    // Fetch conversation history from the backend
+    fetchChatHistory()
+    function fetchChatHistory() {
+        const email = $("#email").val();
+
+        // Make an AJAX request to the backend API
+        $.ajax({
+        url: '/api/chat-history',
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                email: email
+            },
+            success: function (data) {
+                // Process the retrieved conversation data
+                const conversationData = data.data;
+
+                // Update the chat history list
+                const chatHistoryList = $('#chatHistoryList');
+                chatHistoryList.empty();
+                if(!data) {
+                    chatHistoryList.html('<h3>No chat found</h3>');
+                }
+
+                
+                conversationData.forEach(conversation => {
+
+                    const linkDetailChat = ( conversation.recid_conversations !== recidConversation ) ? `<a href="/chat/${conversation.recid_conversations}">${conversation.email} - ${conversation.created_at}</a>` : `<p>${conversation.email} - ${conversation.created_at}</p>`
+                    const listItem = $('<li>').html(linkDetailChat); // Replace with the actual property containing the message
+                    chatHistoryList.append(listItem);
+                });
+            },
+            error: function (xhr, status, error) {
+                console.error('Failed to fetch conversation history:', error);
+                // Handle the error appropriately
+            }
+        });
+    }
+
 });
     
 </script>
