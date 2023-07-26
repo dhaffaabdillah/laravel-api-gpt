@@ -8,6 +8,7 @@ use GuzzleHttp\Client;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use Illuminate\Support\Str;
@@ -129,74 +130,68 @@ class ChatbotController extends Controller
         }
     }
 
+    public function trainModels(Request $request)
+    {
+        $validator = Validator::make($request->all(), 
+        [ 
+            'purpose' => 'required',
+            'file' => 'required|mimes:doc,docx,pdf,txt,json,jsonl|max:2048',
+        ]);   
+        if(!$validator->fails()) {
+            $files = $request->file('file');
+             // Store the file in the storage/app/uploads directory
+            $filename = $files->getClientOriginalName();
+            $path = $files->store('training_file');
+
+            // Optionally, you can get the public URL to the uploaded file
+            $url = Storage::url($path);
+
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
+                'Content-Type' => 'multipart/form-data',
+            ])->post('https://api.openai.com/v1/files', [
+                'purpose' => 'fine-tune',
+                // 'file' => "https://vanaroma.sgp1.digitaloceanspaces.com/dataset.jsonl",
+                'file' => $files->getRealPath(),
+            ]);
+    
+            return response()->json(['msg' => $response->json()]);
+        } else {
+            return response()->json(['error'=>$validator->errors()], 401);
+        }
+        // return response()->json(['msg' => $file]);
+    }
+
     public function trainModel(Request $request)
     {
-        $file = $request->file('file');
-        $filename = 'Dataset-'.Str::uuid().'-'.$file->getClientOriginalName();
+        // Get the uploaded file from the form request
+        $file = $request->file('file-upload');
 
-        // Save the training file to the storage disk
-        $path = $file->storeAs('training_file', $filename, 'public');
-        $filePath = storage_path('' . $path); // Get the full file path
-        // $response = Http::withHeaders([
-        //     'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
-        //     'Content-Type' => 'multipart/form-data',
-        // ])->attach('file', fopen("https://vanaroma.sgp1.digitaloceanspaces.com/dataset.jsonl", 'r'), "dataset1")
-        // ->post('https://api.openai.com/v1/files', [
-        //     'prompt' => $request->input('prompt'),
-        //     'purpose' => $request->input('purpose'),
-        //     // 'file' => $filename
-        // ]);
+        // API endpoint URL
+        $apiUrl = 'https://api.openai.com/v1/files';
+
+        // API Key
+        $apiKey = env('OPENAI_API_KEY');
+
+        // Prepare the payload
+        $payload = [
+            'purpose' => 'fine-tune',
+            'file' => $file
+        ];
+
+        // Make the API call using Laravel's HTTP Client
         $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
-            'Content-Type' => 'multipart/form-data',
-        ])->post('https://api.openai.com/v1/files', [
-            'file' => $file,
-        ]);
-    
+            'Authorization' => 'Bearer ' . $apiKey,
+        ])->attach('file', file_get_contents($file), $file->getClientOriginalName())
+        ->post($apiUrl, $payload);
 
-        if ($response->successful()) {
-            // Training request successful
-            return response()->json(['message' => $response]);
-        } else {
-            // Training request failed
-            return response()->json(['msg' => $response->json(), 'err' => $filePath], $response->status());
-        }
-        // try {
-        //     // Retrieve the uploaded file from the request
-        //     $file = $request->file('file');
-    
-        //     // Make sure a file was uploaded
-        //     if (!$file) {
-        //         throw new \Exception('No file uploaded.');
-        //     }
-    
-        //     // Get the OpenAI API key from the .env file
-        //     $apiKey = env('OPENAI_API_KEY');
-    
-        //     // Make a POST request to the OpenAI API using the uploaded file and API key
-        //     $response = Http::withHeaders([
-        //         'Authorization' => 'Bearer ' . $apiKey,
-        //     ])->post('https://api.openai.com/v1/files', [
-        //         'file' => $file,
-        //     ]);
-    
-        //     // Check if the request was successful
-        //     if (!$response->successful()) {
-        //         throw new \Exception('Failed to upload file to OpenAI.');
-        //     }
-    
-        //     // Get the response data from OpenAI
-        //     $responseData = $response->json();
-    
-        //     // Return the response from OpenAI
-        //     return response()->json($responseData);
-        // } catch (\Exception $e) {
-        //     return response()->json([
-        //         'error' => 'Failed to upload file.',
-        //         'message' => $e->getMessage(),
-        //     ], 500);
-        // }
+        // Handle the response (you can decode the JSON if needed)
+        $result = $response->json();
+
+        // Now you can use $result to work with the API response
+        return response()->json($result);
     }
+    
 
     public function analyzeData(Request $request)
     {
